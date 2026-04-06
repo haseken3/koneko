@@ -20,7 +20,7 @@ def _count_pauses(text: str) -> float:
     return commas * PAUSE_COMMA + periods * PAUSE_PERIOD
 
 
-def extract_slide_notes(pptx_file) -> list[dict]:
+def extract_slide_notes(pptx_file):
     """全スライドのノート欄テキスト・文字数を抽出する。
 
     Args:
