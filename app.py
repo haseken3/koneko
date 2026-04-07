@@ -197,8 +197,8 @@ if uploaded:
         rows_html += (
             f'<tr style="background:{bg}">'
             f'<td style="padding:6px 10px;text-align:center;color:#8A7E6B">{s["slide_num"]}</td>'
-            f'<td style="padding:6px 10px;text-align:right;font-weight:500">{s["char_count"]:,}</td>'
-            f'<td style="padding:6px 10px;text-align:right;color:#8A7E6B">{format_duration(s["estimated_seconds"])}</td>'
+            f'<td style="padding:6px 10px;text-align:left;font-weight:500">{s["char_count"]:,}</td>'
+            f'<td style="padding:6px 10px;text-align:left;color:#8A7E6B">{format_duration(s["estimated_seconds"])}</td>'
             f'<td style="padding:6px 10px">'
             f'<div style="background:#F0EBE4;border-radius:4px;height:16px;overflow:hidden">'
             f'<div style="width:{bar_width:.1f}%;background:{bar_color};height:100%;border-radius:4px"></div>'
@@ -212,9 +212,9 @@ if uploaded:
     <thead>
         <tr style="background:#E8E0D8;color:#3D3929">
             <th style="padding:8px 10px;text-align:center;border-radius:8px 0 0 0;width:40px">No.</th>
-            <th style="padding:8px 10px;text-align:right;width:60px">文字数</th>
-            <th style="padding:8px 10px;text-align:right;width:70px">推定時間</th>
-            <th style="padding:8px 10px;text-align:left;border-radius:0 8px 0 0;min-width:200px">バー</th>
+            <th style="padding:8px 10px;text-align:left;width:60px">文字数</th>
+            <th style="padding:8px 10px;text-align:left;width:70px">推定時間</th>
+            <th style="padding:8px 10px;text-align:left;border-radius:0 8px 0 0;min-width:400px">バー</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
