@@ -47,18 +47,10 @@ st.markdown("""
     }
     .stProgress > div > div > div > div { background-color: #C35A35 !important; }
 
-    /* st.info の背景色をオレンジ系に */
-    [data-testid="stAlert"] {
-        background-color: #FFF3EC !important;
-        border-color: #C35A35 !important;
-        color: #3D3929 !important;
-    }
-    [data-testid="stAlert"] a { color: #C35A35 !important; }
-    [data-testid="stAlert"] p, [data-testid="stAlert"] li { color: #3D3929 !important; }
-
-    /* ファイルアップローダーのボーダー */
+    /* ファイルアップローダーの背景・ボーダーをオレンジ系に */
     [data-testid="stFileUploader"] section {
         border-color: #C35A35 !important;
+        background-color: #FFF3EC !important;
     }
     [data-testid="stFileUploader"] button {
         color: #C35A35 !important;
@@ -228,9 +220,12 @@ if uploaded:
 
 
 else:
-    st.info(
-        "パワーポイント（.pptx）をアップロードすると、ノート欄のナレーション文字数と推定動画尺を分析します。\n\n"
-        "**使い方**\n"
-        "1. PPTXファイルをドラッグ＆ドロップ\n"
-        "2. サイドバーで読み上げ速度を調整"
+    st.markdown(
+        '<div style="background:#FFF3EC;border-left:4px solid #C35A35;border-radius:8px;padding:1rem 1.2rem;color:#3D3929;line-height:1.8">'
+        'パワーポイント（.pptx）をアップロードすると、ノート欄のナレーション文字数と推定動画尺を分析します。<br><br>'
+        '<b>使い方</b><br>'
+        '1. PPTXファイルをドラッグ＆ドロップ<br>'
+        '2. サイドバーで読み上げ速度を調整'
+        '</div>',
+        unsafe_allow_html=True,
     )
