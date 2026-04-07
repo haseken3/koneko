@@ -196,10 +196,10 @@ if uploaded:
         bg = "#FFFFFF" if s["slide_num"] % 2 == 1 else "#FAF7F4"
         rows_html += (
             f'<tr style="background:{bg}">'
-            f'<td style="padding:6px 12px;text-align:center;color:#8A7E6B">{s["slide_num"]}</td>'
-            f'<td style="padding:6px 12px;text-align:right;font-weight:500">{s["char_count"]:,}</td>'
-            f'<td style="padding:6px 12px;text-align:right;color:#8A7E6B">{format_duration(s["estimated_seconds"])}</td>'
-            f'<td style="padding:6px 12px;width:40%">'
+            f'<td style="padding:6px 10px;text-align:center;color:#8A7E6B">{s["slide_num"]}</td>'
+            f'<td style="padding:6px 10px;text-align:right;font-weight:500">{s["char_count"]:,}</td>'
+            f'<td style="padding:6px 10px;text-align:right;color:#8A7E6B">{format_duration(s["estimated_seconds"])}</td>'
+            f'<td style="padding:6px 10px">'
             f'<div style="background:#F0EBE4;border-radius:4px;height:16px;overflow:hidden">'
             f'<div style="width:{bar_width:.1f}%;background:{bar_color};height:100%;border-radius:4px"></div>'
             f'</div></td></tr>'
@@ -208,13 +208,13 @@ if uploaded:
     table_height = 44 + len(slides) * 33  # ヘッダー + 行数 × 行高さ
     components.html(f"""
     <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
-    <table style="width:100%;border-collapse:collapse;font-size:0.9em;font-family:'Zen Maru Gothic',sans-serif">
+    <table style="width:auto;border-collapse:collapse;font-size:0.9em;font-family:'Zen Maru Gothic',sans-serif">
     <thead>
         <tr style="background:#E8E0D8;color:#3D3929">
-            <th style="padding:8px 12px;text-align:center;border-radius:8px 0 0 0">No.</th>
-            <th style="padding:8px 12px;text-align:right">文字数</th>
-            <th style="padding:8px 12px;text-align:right">推定時間</th>
-            <th style="padding:8px 12px;text-align:left;border-radius:0 8px 0 0">バー</th>
+            <th style="padding:8px 10px;text-align:center;border-radius:8px 0 0 0;width:40px">No.</th>
+            <th style="padding:8px 10px;text-align:right;width:60px">文字数</th>
+            <th style="padding:8px 10px;text-align:right;width:70px">推定時間</th>
+            <th style="padding:8px 10px;text-align:left;border-radius:0 8px 0 0;min-width:200px">バー</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
