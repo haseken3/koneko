@@ -110,7 +110,7 @@ if uploaded:
     # ─────────────────────────────────────────
     # サマリー（3カラム metric）
     # ─────────────────────────────────────────
-    st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric(
@@ -126,7 +126,7 @@ if uploaded:
     # ─────────────────────────────────────────
     # タイムラインバー
     # ─────────────────────────────────────────
-    st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
 
     # 文字数に応じた色（薄ベージュ→オレンジ）
     max_chars = max((s["char_count"] for s in slides), default=1)
@@ -177,7 +177,7 @@ if uploaded:
     # ─────────────────────────────────────────
     # スライド別テーブル
     # ─────────────────────────────────────────
-    st.markdown('<div style="margin-top:1.5rem"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
 
     import streamlit.components.v1 as components
 
