@@ -60,6 +60,10 @@ st.markdown("""
     [data-testid="stMetric"] [data-testid="stMetricValue"] {
         font-size: 2rem; color: #3D3929;
     }
+    /* 最初のメトリクス（推定動画尺）をオレンジに */
+    [data-testid="stHorizontalBlock"] > div:first-child [data-testid="stMetricValue"] {
+        color: #C35A35 !important; font-weight: 700;
+    }
     [data-testid="stMetric"] [data-testid="stMetricLabel"] {
         color: #8A7E6B;
     }
@@ -87,7 +91,7 @@ with st.sidebar:
         "読み上げ速度（文字/分）",
         min_value=250,
         max_value=400,
-        value=320,
+        value=350,
         step=10,
         help="日本語ナレーションの目安: ゆっくり250〜速め400文字/分",
     )
@@ -113,15 +117,15 @@ if uploaded:
     st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     with col1:
+        st.metric("推定動画尺", format_duration(result["estimated_seconds"]))
+    with col2:
         st.metric(
             "スライド数",
             f"{result['slides_with_notes']} / {result['total_slides']}",
             help="ナレーション付き / 総スライド数",
         )
-    with col2:
-        st.metric("合計文字数", f"{result['total_chars']:,}")
     with col3:
-        st.metric("推定動画尺", format_duration(result["estimated_seconds"]))
+        st.metric("合計文字数", f"{result['total_chars']:,}")
 
     # ─────────────────────────────────────────
     # タイムラインバー
