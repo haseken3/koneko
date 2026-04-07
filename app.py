@@ -211,10 +211,10 @@ if uploaded:
     <table style="width:auto;border-collapse:collapse;font-size:0.9em;font-family:'Zen Maru Gothic',sans-serif">
     <thead>
         <tr style="background:#E8E0D8;color:#3D3929">
-            <th style="padding:8px 10px;text-align:center;border-radius:8px 0 0 0;width:40px">No.</th>
+            <th style="padding:8px 10px;text-align:center;border-radius:8px 0 0 0;width:70px">スライドNo.</th>
             <th style="padding:8px 10px;text-align:left;width:60px">文字数</th>
             <th style="padding:8px 10px;text-align:left;width:70px">推定時間</th>
-            <th style="padding:8px 10px;text-align:left;border-radius:0 8px 0 0;min-width:400px">バー</th>
+            <th style="padding:8px 10px;text-align:left;border-radius:0 8px 0 0;min-width:400px">文字数の割合</th>
         </tr>
     </thead>
     <tbody>{rows_html}</tbody>
