@@ -1,7 +1,5 @@
 """ko-NeKo — ナレーション尺カウンター UI"""
 
-import csv
-import io
 import streamlit as st
 from narration_counter import analyze_narration, format_duration
 
@@ -49,6 +47,23 @@ st.markdown("""
     }
     .stProgress > div > div > div > div { background-color: #C35A35 !important; }
 
+    /* st.info の背景色をオレンジ系に */
+    [data-testid="stAlert"] {
+        background-color: #FFF3EC !important;
+        border-color: #C35A35 !important;
+        color: #3D3929 !important;
+    }
+    [data-testid="stAlert"] a { color: #C35A35 !important; }
+    [data-testid="stAlert"] p, [data-testid="stAlert"] li { color: #3D3929 !important; }
+
+    /* ファイルアップローダーのボーダー */
+    [data-testid="stFileUploader"] section {
+        border-color: #C35A35 !important;
+    }
+    [data-testid="stFileUploader"] button {
+        color: #C35A35 !important;
+    }
+
     /* メトリクスの数値を大きく */
     [data-testid="stMetric"] [data-testid="stMetricValue"] {
         font-size: 2rem; color: #3D3929;
@@ -85,10 +100,6 @@ with st.sidebar:
         help="日本語ナレーションの目安: ゆっくり250〜速め400文字/分",
     )
 
-    st.markdown(
-        f"<small style='color:#8A7E6B'>現在の設定: {chars_per_min}文字/分</small>",
-        unsafe_allow_html=True,
-    )
 
 # ─────────────────────────────────────────────
 # ファイルアップロード
@@ -215,40 +226,11 @@ if uploaded:
     </table>
     """, height=table_height)
 
-    # ─────────────────────────────────────────
-    # CSVダウンロード
-    # ─────────────────────────────────────────
-    st.markdown("---")
-
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    writer.writerow(["スライド番号", "文字数", "推定時間（秒）", "推定時間"])
-    for s in slides:
-        writer.writerow([
-            s["slide_num"],
-            s["char_count"],
-            round(s["estimated_seconds"], 1),
-            format_duration(s["estimated_seconds"]),
-        ])
-    writer.writerow([])
-    writer.writerow(["合計", result["total_chars"], round(result["estimated_seconds"], 1), format_duration(result["estimated_seconds"])])
-
-    csv_data = buf.getvalue().encode("utf-8-sig")  # Excel対応BOM付き
-    filename = uploaded.name.replace(".pptx", "") + "_narration.csv"
-
-    st.download_button(
-        "CSVダウンロード",
-        data=csv_data,
-        file_name=filename,
-        mime="text/csv",
-        type="primary",
-    )
 
 else:
     st.info(
         "パワーポイント（.pptx）をアップロードすると、ノート欄のナレーション文字数と推定動画尺を分析します。\n\n"
         "**使い方**\n"
         "1. PPTXファイルをドラッグ＆ドロップ\n"
-        "2. サイドバーで読み上げ速度を調整\n"
-        "3. 結果をCSVでダウンロード"
+        "2. サイドバーで読み上げ速度を調整"
     )
