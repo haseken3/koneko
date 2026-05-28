@@ -1,2 +1,7 @@
-streamlit
-python-pptx
+# ko-NeKo IDチェッカー Phase A (2026-05-28)
+# 全パッケージはローカル動作確認済みバージョンでピン留め
+# anthropic 0.84 で固定（最新 0.104 への bump は Phase A 完成後に別検証）
+streamlit==1.50.0
+python-pptx==1.0.2
+python-docx==1.2.0
+anthropic==0.84.0

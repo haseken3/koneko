@@ -1,0 +1,103 @@
+{
+  "meta": {
+    "name": "レイヤーモデルに基づく「開志創造大学情報デザイン学部」オンデマンド授業チェックリスト",
+    "based_on": "鈴木克明（2006）レイヤーモデル",
+    "version": "1.0",
+    "source": "学部内部教材から抽出（鈴木克明 2006 レイヤーモデル準拠）",
+    "extracted_at": "2026-05-28",
+    "in_scope_policy": "初年度（2026年度開講授業）は、オンデマンド教材の質保証に直結する部分（レベル -1・レベル 0・レベル 1）を満たすことを目指し、IDはその部分を中心に確認する。レベル 2/3 は参考情報。",
+    "field_conventions": {
+      "note": "未記入時は空文字列 \"\" を使う（null禁止）",
+      "applicable_years": "適用年度の配列。年度追加時はこの配列に文字列で追記する",
+      "teacher_self_check": "教員が自身で内容正確性を確認する項目（業務観点）",
+      "llm_evaluable": "LLMで評価可能な項目（機械観点）。teacher_self_check=true の項目は llm_evaluable=false"
+    }
+  },
+  "levels": [
+    {
+      "id": "-1",
+      "value": -1,
+      "name": "いらつきのなさ",
+      "type": "精神衛生上の要件",
+      "scope": "情報デザイン学部のオンデマンド授業仕様に則っているかどうかの確認項目。主にサービスの安定度・安心感を与える観点から確認（LMS・アクセス環境は除く）。"
+    },
+    {
+      "id": "0",
+      "value": 0,
+      "name": "ムダのなさ",
+      "type": "SME的要件（SME：Subject Matter Expert）",
+      "scope": "シラバスや対象者レベル、著作権表示等のみを確認。内容の正確性や根拠等は授業を担当する教員のみが確認する（*の項目）。"
+    },
+    {
+      "id": "1",
+      "value": 1,
+      "name": "わかりやすさ",
+      "type": "情報デザインの要件",
+      "scope": "スライドレイアウト・ナレーション、ナビゲーション面からの確認項目。主に情報提示のわかりやすさを確認（LMSのユーザビリティは除く）。"
+    },
+    {
+      "id": "2",
+      "value": 2,
+      "name": "学びやすさ",
+      "type": "学習効果の要件",
+      "scope": "導入、学習内容の提示、まとめ、学習活動、全体構成の観点から確認（学び合い等は授業運営時に提案）。"
+    },
+    {
+      "id": "3",
+      "value": 3,
+      "name": "学びたさ",
+      "type": "魅力の要件",
+      "scope": "学生の動機づけを高める観点から確認（課題・レポート等での更なる意欲提案は授業運営時に行う）。"
+    }
+  ],
+  "items": [
+    {"id": "-1.1", "level": -1, "title": "誤植、変換ミスなどはないか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.2", "level": -1, "title": "1回の授業は4つのStepに分けられているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.3", "level": -1, "title": "各Stepは15分程度におさまっているか？（13〜17分の範囲）", "note": "Step内に演習等を設ける場合は、5〜10分程度の説明を行う。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.4", "level": -1, "title": "1回の授業時間は60分程度におさまっているか？（50〜65分の範囲）", "note": "1回の授業内に演習等を設ける場合はその時間を含める。長すぎる場合は、学生からの授業アンケート評価が低くなる可能性。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.5", "level": -1, "title": "各Stepのタイトルスライドに科目名、授業回、回タイトル、Step〇、教員名が記載されているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.6", "level": -1, "title": "Step1の冒頭スライドにその回の学習目標やテーマの説明（導入）があるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.7", "level": -1, "title": "Step1〜Step4の冒頭スライドにそのStepで何を学ぶかの説明（導入）があるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.8", "level": -1, "title": "Step1〜Step4の末尾スライドにそのStepのポイントを示したまとめがあるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.9", "level": -1, "title": "Step4の末尾スライドにその回のポイントを示したまとめがあるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.10", "level": -1, "title": "Step4の末尾に小テスト・課題への指示があるか？", "note": "動画外（PDF資料など）で説明してもかまわない。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "-1.11", "level": -1, "title": "学生に安心を与える語りかけになっているか？", "note": "「できて当然」を前提にする語り＝「これぐらいは大丈夫ですね／知っているはずです」など → 「これは前にやりましたね。大事なのでもう一度復習しましょう」「一緒に考えていきましょう」のように。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+
+    {"id": "0.1", "level": 0, "title": "その回の内容は、シラバス通りか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.2", "level": 0, "title": "その回・そのStepの学習目標やテーマと内容との間に齟齬はないか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.3", "level": 0, "title": "その回の内容は一貫しているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.4", "level": 0, "title": "科目全体の内容に齟齬はないか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.5", "level": 0, "title": "説明（ナレーション・スライド）は、対象者レベルに合っているか？（難しすぎないか？）", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.6", "level": 0, "title": "対象者レベルに応じた専門用語の説明となっているか？", "note": "初出の専門用語には説明が必要。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.7", "level": 0, "title": "用語の揺れはないか？（ナレーションとスライド、ナレーション・スライド間）", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.8", "level": 0, "title": "図・表・グラフとナレーションの間に齟齬はないか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "0.9", "level": 0, "title": "引用した素材の著作権表記（出典）がされているか？", "note": "出典表記は、授業担当教員の方で行う。", "teacher_self_check": true, "llm_evaluable": false, "applicable_years": ["2026"]},
+    {"id": "0.10", "level": 0, "title": "内容は正確か？", "note": "用語・数字に間違いはないか／必要に応じて、論文・本・Webページ・実験結果等を表示している等。内容の正確性は、授業担当教員の方で確認する。", "teacher_self_check": true, "llm_evaluable": false, "applicable_years": ["2026"]},
+
+    {"id": "1.1", "level": 1, "title": "1スライドの説明が3分以上続いていないか？", "note": "1スライドの説明は1〜3分とし、動画教材では、20〜30秒に一度、箇条書きを順次表示するなどの動きを付けることが基本。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.2", "level": 1, "title": "スライドに説明の文章をそのまま書いていないか？", "note": "スライドは、短文・箇条書き・図表を中心に構成する。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.3", "level": 1, "title": "箇条書きは構造化されているか？（構造化＝関係づけ（カテゴリや階層）の整理）", "note": "同じ種類の情報が同じレベルに書かれているか。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.4", "level": 1, "title": "箇条書きは系列化されているか？（系列化＝順序づけ（流れや手順）の整理）", "note": "箇条書きが時間的・論理的な順序を持って並んでいるか。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.5", "level": 1, "title": "重要事項は、スライド上に示されているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.6", "level": 1, "title": "スライドに示した重要事項には、囲みや太字等の強調表示はあるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.7", "level": 1, "title": "ナレーションはスライド表示の順と一致しているか？（提示情報と音声情報の一致）", "note": "ナレーションにあるのにスライドにはない／スライドにはあるのにナレーションにはない、を避ける。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.8", "level": 1, "title": "説明と説明をつなぐ、つなぎのナレーションはあるか？", "note": "（例）「次は〇〇について考えていきましょう」など。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.9", "level": 1, "title": "スライドの見出し（小見出し）とナレーションは整合しているか？", "note": "説明内容とは合致していない見出し、見出しを変えずに同じ見出しを使い続けるなどの確認。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.10", "level": 1, "title": "耳で聞いてわかりにくい単語はないか？（同音異義語など）", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.11", "level": 1, "title": "ナレーション一文は長すぎないか？", "note": "聞いて理解できる範囲の80文字程度までか／1文1トピックになっているか。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+    {"id": "1.12", "level": 1, "title": "Step見出しは学生が内容をイメージできるものとなっているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": ["2026"]},
+
+    {"id": "2.1", "level": 2, "title": "学習目標は、学生を主語として「何ができるようになる」が述べられているか？", "note": "（例）「〇〇について理解できるようになることが目標です／〇〇ができるようになります」など。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.2", "level": 2, "title": "学生が興味を持ちそうな身近な具体例から授業を始めているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.3", "level": 2, "title": "新しいことを教えるために必要な復習が十分になされているか？", "note": "その授業で学んだことの復習の他、中学・高校レベルの復習も必要な場合がある。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.4", "level": 2, "title": "具体例や事例が示されているか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.5", "level": 2, "title": "具体例や事例と学習目標との関連を示す説明があるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.6", "level": 2, "title": "新しいことを1つ説明した後に、小さなまとめがあるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.7", "level": 2, "title": "問いかけなど、学生に考えさせる展開があるか？", "note": "（例）「あなたならどう考えますか？」「身近な事例に当てはめるとどうなりますか？」など。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "2.8", "level": 2, "title": "クイズや「自分でコードを書いてみよう」などの問いかけがあるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+
+    {"id": "3.1", "level": 3, "title": "発展学習の紹介があるか？", "note": "（例）「さらに学習をしたい方は、（本やWebページの名前）を見てみましょう」など。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "3.2", "level": 3, "title": "この科目で学んだことがどのように役立つかの説明があるか？", "note": "", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []},
+    {"id": "3.3", "level": 3, "title": "教員自身の経験談や学んだ先にある将来像の説明があるか？", "note": "（例）「私はこれまでの業務経験で、〇〇を□□のように使いました」など。", "teacher_self_check": false, "llm_evaluable": true, "applicable_years": []}
+  ]
+}

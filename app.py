@@ -91,7 +91,7 @@ with st.sidebar:
         "読み上げ速度（文字/分）",
         min_value=250,
         max_value=400,
-        value=350,
+        value=300,
         step=10,
         help="日本語ナレーションの目安: ゆっくり250〜速め400文字/分",
     )

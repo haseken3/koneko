@@ -53,7 +53,7 @@ def extract_slide_notes(pptx_file):
     return results
 
 
-def analyze_narration(pptx_file, chars_per_min: int = 320) -> dict:
+def analyze_narration(pptx_file, chars_per_min: int = 300) -> dict:
     """PPTXのナレーション文字数を集計し、推定尺を算出する。
 
     Args:
