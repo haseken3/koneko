@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# 内部資料（公開しない）
+engawa/
+_experiments/
+idcheck/sample_feedbacks/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Secrets / Keys（API キー・証明書の不可逆漏洩防止）
+.env
+.env.*
+*.key
+*.pem
+
+# Office artifacts（学生実物・出力サンプルの PII 混入防止）
+*.pptx
+*.docx
