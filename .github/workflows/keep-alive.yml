@@ -9,6 +9,16 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # 1つ落ちても他は叩く
+      matrix:
+        url:
+          - https://koneko-narration-counter.streamlit.app/ # 文字数チェッカー
+          - https://koneko-idcheck.streamlit.app/ # IDチェッカー v1（命名規則からの推測URL。誤りなら -fsS で CI が赤くなり気づける）
     steps:
       - name: Ping Streamlit app
-        run: curl -s -o /dev/null -w "%{http_code}" https://koneko-narration-counter.streamlit.app/
+        # -f: 4xx/5xx で exit 22（URL が死んでいたら CI を赤くして気づけるように）
+        # --max-time 60: 無応答ハングで課金枠を無駄に食う事故の保険
+        run: |
+          echo "Pinging ${{ matrix.url }}"
+          curl -fsS --max-time 60 -o /dev/null -w "%{http_code}\n" "${{ matrix.url }}"
