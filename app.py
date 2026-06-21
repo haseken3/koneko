@@ -1,7 +1,69 @@
 """ko-NeKo — ナレーション尺カウンター UI"""
 
 import streamlit as st
-from narration_counter import analyze_narration, format_duration
+from narration_counter import (
+    analyze_narration,
+    format_duration,
+    group_slides_into_steps,
+    STEP_TARGET_MIN_SEC,
+    STEP_TARGET_MAX_SEC,
+)
+import step_segmenter
+
+
+def _load_anthropic_key():
+    """Streamlit Secrets（Cloud）→ ローカルファイル の順で Anthropic API キーを取得。"""
+    from pathlib import Path
+    try:
+        if "anthropic_api_key" in st.secrets:
+            return st.secrets["anthropic_api_key"]
+    except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
+        pass
+    p = Path.home() / ".config" / "koneko-idcheck" / "anthropic_api_key.txt"
+    if p.exists():
+        return p.read_text().strip()
+    return None
+
+
+def _render_step_table(steps):
+    """ステップ別集計テーブルを描画する（app/ui 共通の見た目）。"""
+    target_label = f"目標 {STEP_TARGET_MIN_SEC // 60}〜{STEP_TARGET_MAX_SEC // 60}分"
+    html = (
+        '<table style="width:auto;border-collapse:collapse;font-size:0.9em">'
+        '<thead><tr style="background:#E8E0D8;color:#3D3929">'
+        '<th style="padding:8px 12px;text-align:left">ステップ</th>'
+        '<th style="padding:8px 12px;text-align:left">スライド</th>'
+        '<th style="padding:8px 12px;text-align:right">文字数</th>'
+        '<th style="padding:8px 12px;text-align:right">推定尺</th>'
+        f'<th style="padding:8px 12px;text-align:left">{target_label}</th>'
+        '</tr></thead><tbody>'
+    )
+    for idx, stp in enumerate(steps):
+        sec = stp["estimated_seconds"]
+        if stp["status"] == "over":
+            badge = (f'<span style="color:#C0392B;font-weight:600">⚠ '
+                     f'+{format_duration(sec - STEP_TARGET_MAX_SEC)} オーバー</span>')
+        elif stp["status"] == "under":
+            badge = (f'<span style="color:#B7791F;font-weight:600">⚠ '
+                     f'-{format_duration(STEP_TARGET_MIN_SEC - sec)} 不足</span>')
+        else:
+            badge = '<span style="color:#1E8449;font-weight:600">✓ 目標内</span>'
+        rng = stp["slide_range"]
+        title_hint = (stp["first_title"] or "")[:20]
+        bg = "#FFFFFF" if idx % 2 == 0 else "#FAF7F4"
+        html += (
+            f'<tr style="background:{bg}">'
+            f'<td style="padding:6px 12px"><b style="color:#C35A35">{stp["step_label"]}</b> '
+            f'<span style="color:#8A7E6B">{title_hint}</span></td>'
+            f'<td style="padding:6px 12px;color:#8A7E6B">'
+            f'S{rng[0]}–S{rng[1]}（{stp["slide_count"]}枚）</td>'
+            f'<td style="padding:6px 12px;text-align:right">{stp["char_count"]:,}</td>'
+            f'<td style="padding:6px 12px;text-align:right">{format_duration(sec)}</td>'
+            f'<td style="padding:6px 12px">{badge}</td>'
+            f'</tr>'
+        )
+    html += '</tbody></table>'
+    st.markdown(html, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # ページ設定
@@ -220,6 +282,58 @@ if uploaded:
     <tbody>{rows_html}</tbody>
     </table>
     """, height=table_height)
+
+    # ─────────────────────────────────────────
+    # ステップ別集計（ノート原稿をAIで意味分割）
+    # ─────────────────────────────────────────
+    st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
+    st.markdown("#### 🪜 ステップ別の文字数・尺")
+    st.caption(
+        "ノート欄の原稿をAI（Claude）が読んで、内容が大きく変わる所で最大4ステップに分けます。"
+        "各ステップが目標尺（10〜17分）に収まっているかを確認できます。"
+    )
+
+    api_key = _load_anthropic_key()
+    file_id = f"{uploaded.name}:{getattr(uploaded, 'size', '')}"
+
+    if not api_key:
+        st.info(
+            "ステップ分割（AI）には Anthropic API キーが必要です。"
+            "管理者の方は Streamlit secrets の `anthropic_api_key`、または "
+            "`~/.config/koneko-idcheck/anthropic_api_key.txt` を設定してください。"
+        )
+    else:
+        if st.button("🪜 AIでステップに分割する", key="app_seg_btn", type="primary"):
+            with st.spinner("AIがノート原稿を読んでステップを判定中…（10〜30秒ほど）"):
+                try:
+                    seg = step_segmenter.segment_steps(
+                        slides, api_key,
+                        lecture_title=uploaded.name.rsplit(".", 1)[0],
+                    )
+                    st.session_state["app_seg"] = {"file": file_id, **seg}
+                except Exception as e:
+                    st.error(f"ステップ分割に失敗しました: {e}")
+
+        seg = st.session_state.get("app_seg")
+        if seg and seg.get("file") == file_id and seg.get("boundaries"):
+            slide_titles = {
+                s["slide_num"]: (s["title"] or f"スライド{s['slide_num']}") for s in slides
+            }
+            all_slide_nums = [s["slide_num"] for s in slides]
+            chosen = st.multiselect(
+                "ステップの開始スライド（AIの判定。ずれていたら直せます）",
+                options=all_slide_nums,
+                default=seg["boundaries"],
+                format_func=lambda n: f"S{n}: {slide_titles.get(n, '')[:24]}",
+                key="app_counter_boundaries",
+            )
+            boundaries = sorted(chosen) if chosen else seg["boundaries"]
+            # 手動で境界を変えたらAIラベルと対応がずれるので連番ラベルに切り替える
+            use_labels = seg["labels"] if boundaries == seg["boundaries"] else None
+            steps = group_slides_into_steps(slides, boundaries, use_labels)
+            _render_step_table(steps)
+            if seg.get("rationale"):
+                st.caption(f"🤖 AIの判定根拠: {seg['rationale']}")
 
 
 else:
