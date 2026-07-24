@@ -11,13 +11,13 @@
   さらにコード側でも truncate（LLMの「4を埋めようとする」バイアス＋外れ値対策）。
 - プロンプトは「最大4は上限であって目標ではない／2〜3で十分なことも多い」と
   逆方向のキャンセル圧をかける（レン初稿の核）。
-- モデルは claude-opus-4-8（最新Opus）。temperature/top_p 等は渡さない（Opus 4.8で400）。
+- モデルは claude-opus-5（最新Opus・2026-07-25 更新）。temperature/top_p 等は渡さない（Opus 4.7以降で400）。
   構造化出力は tool-use（tool_choice で強制）。
 """
 
 import anthropic
 
-MODEL = "claude-opus-4-8"
+MODEL = "claude-opus-5"
 MAX_STEPS = 4
 MAX_RETRIES = 3
 MAX_TOKENS = 2000  # 出力は最大4ステップ＝小さい
@@ -152,7 +152,7 @@ def segment_steps(slides, api_key, *, model: str = MODEL,
     Args:
         slides: analyze_narration の返値 ["slides"]（slide_num/title/notes を含む）
         api_key: Anthropic API キー
-        model: 使用モデル（既定 claude-opus-4-8）
+        model: 使用モデル（既定 claude-opus-5）
         lecture_title: 授業タイトル（任意・プロンプトの文脈に使う）
 
     Returns:
