@@ -1,7 +1,18 @@
 """ko-NeKo — PPTXナレーション文字数カウント＋尺推定ロジック"""
 
 import re
+import sys
+from pathlib import Path
+
 from pptx import Presentation
+
+# このモジュールは flat（app.py の `from narration_counter import ...`）と
+# パッケージ経由（ui.py の `from koneko.narration_counter import ...`）の両方で読まれるので、
+# 自分の居るディレクトリを末尾に足してから flat import する（どちらでも解決するため）。
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.append(_HERE)
+from pptx_notes import read_notes  # noqa: E402
 
 # ポーズ時間（VoiceSpace デフォルト設定）
 PAUSE_COMMA = 0.3   # 「、」1個あたり（秒）
@@ -31,6 +42,7 @@ def extract_slide_notes(pptx_file):
             slide_num, title, notes, char_count, pause_seconds
     """
     prs = Presentation(pptx_file)
+    total_slides = len(prs.slides)
     results = []
 
     for i, slide in enumerate(prs.slides, start=1):
@@ -38,9 +50,7 @@ def extract_slide_notes(pptx_file):
         if slide.shapes.title:
             title = slide.shapes.title.text.strip()
 
-        notes = ""
-        if slide.has_notes_slide:
-            notes = slide.notes_slide.notes_text_frame.text.strip()
+        notes = read_notes(slide, slide_num=i, total_slides=total_slides)
 
         # layout_name はステップ判定には使わない（判定はノート欄テキストのLLM意味分割）。
         # レイアウト名での判別は教員横断で約4割しか効かず廃止した。将来 LLM 結果の

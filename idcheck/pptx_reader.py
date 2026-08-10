@@ -1,6 +1,17 @@
 """PPTX 解析モジュール — 全スライドのタイトル・本文・ノート欄を抽出する。"""
 
+import sys
+from pathlib import Path
+
 from pptx import Presentation
+
+# ノート欄の読み取り判断は koneko ルートの pptx_notes に集約する（読み手が2箇所あり、
+# 別々に書くと片方だけ直る）。IDチェッカーは idcheck/ を起点に起動するので、
+# ルートを末尾に足してから import する（先頭に差すと同名モジュールの解決先を奪う）。
+_KONEKO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _KONEKO_ROOT not in sys.path:
+    sys.path.append(_KONEKO_ROOT)
+from pptx_notes import read_notes  # noqa: E402
 
 
 def read_slides(pptx_file) -> list[dict]:
@@ -17,6 +28,7 @@ def read_slides(pptx_file) -> list[dict]:
             notes (str): ノート欄テキスト
     """
     prs = Presentation(pptx_file)
+    total_slides = len(prs.slides)
     slides = []
 
     for i, slide in enumerate(prs.slides, start=1):
@@ -33,9 +45,7 @@ def read_slides(pptx_file) -> list[dict]:
                 title = text.split("\n")[0][:120]
             body_parts.append(text)
 
-        notes = ""
-        if slide.has_notes_slide:
-            notes = slide.notes_slide.notes_text_frame.text.strip()
+        notes = read_notes(slide, slide_num=i, total_slides=total_slides)
 
         slides.append({
             "slide_num": i,
