@@ -1,4 +1,4 @@
-"""ko-NeKo — ナレーション尺カウンター UI"""
+"""ko-NeKo — 授業資料チェッカー UI（文字数カウンター＋不一致・誤字脱字チェック）"""
 
 import streamlit as st
 from narration_counter import (
@@ -8,7 +8,12 @@ from narration_counter import (
     STEP_TARGET_MIN_SEC,
     STEP_TARGET_MAX_SEC,
 )
-import step_segmenter
+from slide_script_check_ui import (
+    render_slide_script_check,
+    run_step_segmentation,
+    make_file_id,
+    widget_suffix,
+)
 
 
 def _load_anthropic_key():
@@ -69,7 +74,7 @@ def _render_step_table(steps):
 # ページ設定
 # ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="ko-NeKo：ナレーションカウンター",
+    page_title="ko-NeKo：授業資料チェッカー",
     page_icon=":cat:",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -101,11 +106,16 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #F0EBE4; }
     [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #3D3929; }
 
-    .stButton > button[kind="primary"], button[kind="primary"] {
+    .stButton > button[kind="primary"], button[kind="primary"],
+    [data-testid="stDownloadButton"] button[kind="primary"] {
         background-color: #C35A35 !important; border-color: #C35A35 !important; color: white !important;
     }
-    .stButton > button[kind="primary"]:hover, button[kind="primary"]:hover {
+    .stButton > button[kind="primary"]:hover, button[kind="primary"]:hover,
+    [data-testid="stDownloadButton"] button[kind="primary"]:hover {
         background-color: #A8492C !important; border-color: #A8492C !important;
+    }
+    [data-testid="stDownloadButton"] button[kind="primary"] p {
+        color: white !important;
     }
     .stProgress > div > div > div > div { background-color: #C35A35 !important; }
 
@@ -138,7 +148,7 @@ st.markdown("""
 st.markdown(
     '<div style="margin-bottom:0.5rem">'
     '<span style="font-size:1.8rem;font-weight:700;color:#3D3929">ko-NeKo</span>'
-    '<span style="font-size:0.9rem;color:#8A7E6B;margin-left:8px">ナレーションカウンター</span>'
+    '<span style="font-size:0.9rem;color:#8A7E6B;margin-left:8px">授業資料チェッカー</span>'
     '</div>',
     unsafe_allow_html=True,
 )
@@ -165,13 +175,19 @@ with st.sidebar:
 uploaded = st.file_uploader(
     "PPTXファイルをアップロード",
     type=["pptx"],
-    help="パワーポイントをアップロードすると、ノート欄のナレーション文字数と推定尺を表示します",
+    help="パワーポイントをアップロードすると文字数・推定尺を表示します。"
+         "「チェックを実行する」ボタンを押すと、内容の不一致・誤字脱字の可能性もAIがチェックします",
 )
 
 if uploaded:
     # 解析実行
     result = analyze_narration(uploaded, chars_per_min=chars_per_min)
     slides = result["slides"]
+
+    # スライドと原稿のチェック（不一致・誤字脱字の可能性）は画面の一番上に表示する
+    # （2026-09-17・ケンタ指示）。ただしステップ分割の結果（steps）を括りに使うため、
+    # 計算は下（steps確定後）で行い、描画だけこのスロットに差し込む。
+    ssc_slot = st.container()
 
     # ─────────────────────────────────────────
     # サマリー（3カラム metric）
@@ -294,7 +310,8 @@ if uploaded:
     )
 
     api_key = _load_anthropic_key()
-    file_id = f"{uploaded.name}:{getattr(uploaded, 'size', '')}"
+    file_id = make_file_id(uploaded, uploaded.name)
+    steps = None
 
     if not api_key:
         st.info(
@@ -303,18 +320,8 @@ if uploaded:
             "`~/.config/koneko-idcheck/anthropic_api_key.txt` を設定してください。"
         )
     else:
-        if st.button("🪜 AIでステップに分割する", key="app_seg_btn", type="primary"):
-            with st.spinner("AIがノート原稿を読んでステップを判定中…（10〜30秒ほど）"):
-                try:
-                    seg = step_segmenter.segment_steps(
-                        slides, api_key,
-                        lecture_title=uploaded.name.rsplit(".", 1)[0],
-                    )
-                    st.session_state["app_seg"] = {"file": file_id, **seg}
-                except Exception as e:
-                    st.error(f"ステップ分割に失敗しました: {e}")
-
-        seg = st.session_state.get("app_seg")
+        seg = run_step_segmentation("app", file_id, slides, api_key,
+                                    lecture_title=uploaded.name.rsplit(".", 1)[0])
         if seg and seg.get("file") == file_id and seg.get("boundaries"):
             slide_titles = {
                 s["slide_num"]: (s["title"] or f"スライド{s['slide_num']}") for s in slides
@@ -324,8 +331,8 @@ if uploaded:
                 "ステップの開始スライド（AIの判定。ずれていたら直せます）",
                 options=all_slide_nums,
                 default=seg["boundaries"],
-                format_func=lambda n: f"S{n}: {slide_titles.get(n, '')[:24]}",
-                key="app_counter_boundaries",
+                format_func=lambda n: f"スライド{n}: {slide_titles.get(n, '')[:24]}",
+                key=f"app_counter_boundaries_{widget_suffix(file_id)}",
             )
             boundaries = sorted(chosen) if chosen else seg["boundaries"]
             # 手動で境界を変えたらAIラベルと対応がずれるので連番ラベルに切り替える
@@ -335,14 +342,23 @@ if uploaded:
             if seg.get("rationale"):
                 st.caption(f"🤖 AIの判定根拠: {seg['rationale']}")
 
+    # 描画は上（ssc_slot）で行う。計算はここまで（steps確定後）で完了しているので
+    # スロットへ差し込む（st.container による先読み描画・計算順は変えない）。
+    with ssc_slot:
+        render_slide_script_check(uploaded, api_key, file_id=file_id, key_prefix="app",
+                                  steps=steps, source_label=uploaded.name,
+                                  total_slides=result["total_slides"])
 
 else:
     st.markdown(
         '<div style="background:#FFF3EC;border-left:4px solid #C35A35;border-radius:8px;padding:1rem 1.2rem;color:#3D3929;line-height:1.8">'
-        'パワーポイント（.pptx）をアップロードすると、ノート欄のナレーション文字数と推定動画尺を分析します。<br><br>'
+        'パワーポイント（.pptx）をアップロードすると、'
+        'ノート欄のナレーション文字数・推定動画尺・ステップ別の尺を自動で分析します。<br><br>'
         '<b>使い方</b><br>'
         '1. PPTXファイルをドラッグ＆ドロップ<br>'
-        '2. サイドバーで読み上げ速度を調整'
+        '2. サイドバーで読み上げ速度を調整<br>'
+        '3. 内容の不一致・誤字脱字のチェックは「チェックを実行する」ボタンで開始'
+        '（枚数が多いと数分・費用がかかります）'
         '</div>',
         unsafe_allow_html=True,
     )

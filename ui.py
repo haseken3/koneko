@@ -12,7 +12,12 @@ from koneko.narration_counter import (
     STEP_TARGET_MIN_SEC,
     STEP_TARGET_MAX_SEC,
 )
-from koneko import step_segmenter
+from koneko.slide_script_check_ui import (
+    render_slide_script_check,
+    run_step_segmentation,
+    make_file_id,
+    widget_suffix,
+)
 
 
 def _load_anthropic_key():
@@ -192,6 +197,13 @@ def render_koneko_counter():
         [data-testid="stMetric"] [data-testid="stMetricLabel"] {
             color: #8A7E6B;
         }
+        [data-testid="stDownloadButton"] button[kind="primary"] {
+            background-color: #C35A35 !important; border-color: #C35A35 !important;
+            color: white !important;
+        }
+        [data-testid="stDownloadButton"] button[kind="primary"] p {
+            color: white !important;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -200,6 +212,10 @@ def render_koneko_counter():
     if source:
         result = analyze_narration(source, chars_per_min=chars_per_min)
         slides = result["slides"]
+
+        # スライドと原稿のチェックは画面の一番上に表示する（2026-09-17・ケンタ指示）。
+        # 計算は下（steps確定後）で行い、描画だけこのスロットに差し込む。
+        ssc_slot = st.container()
 
         # サマリー
         st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
@@ -308,7 +324,8 @@ def render_koneko_counter():
         )
 
         api_key = _load_anthropic_key()
-        file_id = str(source_label)
+        file_id = make_file_id(source, source_label)
+        steps = None
 
         if not api_key:
             st.info(
@@ -317,18 +334,8 @@ def render_koneko_counter():
                 "`~/.config/koneko-idcheck/anthropic_api_key.txt` を設定してください。"
             )
         else:
-            if st.button("🪜 AIでステップに分割する", key="koneko_seg_btn", type="primary"):
-                with st.spinner("AIがノート原稿を読んでステップを判定中…（10〜30秒ほど）"):
-                    try:
-                        seg = step_segmenter.segment_steps(
-                            slides, api_key,
-                            lecture_title=str(source_label).rsplit(".", 1)[0],
-                        )
-                        st.session_state["koneko_seg"] = {"file": file_id, **seg}
-                    except Exception as e:
-                        st.error(f"ステップ分割に失敗しました: {e}")
-
-            seg = st.session_state.get("koneko_seg")
+            seg = run_step_segmentation("koneko", file_id, slides, api_key,
+                                        lecture_title=str(source_label).rsplit(".", 1)[0])
             if seg and seg.get("file") == file_id and seg.get("boundaries"):
                 slide_titles = {
                     s["slide_num"]: (s["title"] or f"スライド{s['slide_num']}") for s in slides
@@ -338,8 +345,8 @@ def render_koneko_counter():
                     "ステップの開始スライド（AIの判定。ずれていたら直せます）",
                     options=all_slide_nums,
                     default=seg["boundaries"],
-                    format_func=lambda n: f"S{n}: {slide_titles.get(n, '')[:24]}",
-                    key="koneko_counter_boundaries",
+                    format_func=lambda n: f"スライド{n}: {slide_titles.get(n, '')[:24]}",
+                    key=f"koneko_counter_boundaries_{widget_suffix(file_id)}",
                 )
                 boundaries = sorted(chosen) if chosen else seg["boundaries"]
                 # 手動で境界を変えたらAIラベルと対応がずれるので連番ラベルに切り替える
@@ -349,13 +356,22 @@ def render_koneko_counter():
                 if seg.get("rationale"):
                     st.caption(f"🤖 AIの判定根拠: {seg['rationale']}")
 
+        # 描画は上（ssc_slot）で行う。計算はここまで（steps確定後）で完了している。
+        with ssc_slot:
+            render_slide_script_check(source, api_key, file_id=file_id, key_prefix="koneko",
+                                      steps=steps, source_label=str(source_label),
+                                      total_slides=result["total_slides"])
+
     else:
         st.markdown(
             '<div style="background:#FFF3EC;border-left:4px solid #C35A35;border-radius:8px;padding:1rem 1.2rem;color:#3D3929;line-height:1.8">'
-            'パワーポイント（.pptx）または Canva のデザインを取り込むと、ノート欄のナレーション文字数と推定動画尺を分析します。<br><br>'
+            'パワーポイント（.pptx）または Canva のデザインを取り込むと、'
+            'ノート欄のナレーション文字数・推定動画尺・ステップ別の尺を自動で分析します。<br><br>'
             '<b>使い方</b><br>'
             '1. PPTXをドラッグ＆ドロップ、または「Canva URL」タブで共有URLを取り込む<br>'
-            '2. サイドバーで読み上げ速度を調整'
+            '2. サイドバーで読み上げ速度を調整<br>'
+            '3. 内容の不一致・誤字脱字のチェックは「チェックを実行する」ボタンで開始'
+            '（枚数が多いと数分・費用がかかります）'
             '</div>',
             unsafe_allow_html=True,
         )

@@ -11,13 +11,22 @@
   さらにコード側でも truncate（LLMの「4を埋めようとする」バイアス＋外れ値対策）。
 - プロンプトは「最大4は上限であって目標ではない／2〜3で十分なことも多い」と
   逆方向のキャンセル圧をかける（レン初稿の核）。
-- モデルは claude-opus-5（最新Opus・2026-07-25 更新）。temperature/top_p 等は渡さない（Opus 4.7以降で400）。
+- モデルIDは llm_models.MODEL_SEGMENT に集約（用途ごとに実測で決める）。temperature/top_p 等は渡さない（Opus 4.7以降で400）。
   構造化出力は tool-use（tool_choice で強制）。
 """
 
+import sys
+from pathlib import Path
+
 import anthropic
 
-MODEL = "claude-opus-5"
+# flat（app.py）とパッケージ経由（koneko.ui）の両方で読まれるので、自分の居るディレクトリを
+# 末尾に足してから flat import する（slide_script_check.py と同じ作法）。
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.append(_HERE)
+from llm_models import MODEL_SEGMENT  # noqa: E402
+
 MAX_STEPS = 4
 MAX_RETRIES = 3
 MAX_TOKENS = 2000  # 出力は最大4ステップ＝小さい
@@ -145,14 +154,14 @@ def _sanitize_steps(raw_steps, valid_nums) -> tuple:
     return boundaries, labels
 
 
-def segment_steps(slides, api_key, *, model: str = MODEL,
+def segment_steps(slides, api_key, *, model: str = MODEL_SEGMENT,
                   lecture_title: str = "") -> dict:
     """slides を Opus で意味分割し、境界とラベルを返す。
 
     Args:
         slides: analyze_narration の返値 ["slides"]（slide_num/title/notes を含む）
         api_key: Anthropic API キー
-        model: 使用モデル（既定 claude-opus-5）
+        model: 使用モデル（既定 llm_models.MODEL_SEGMENT）
         lecture_title: 授業タイトル（任意・プロンプトの文脈に使う）
 
     Returns:
