@@ -12,12 +12,15 @@
 実行: /usr/bin/python3 -m pytest test_slide_script_report.py -q （koneko ルートから）
 """
 
+import re
 import sys
 from pathlib import Path
 
 import pytest
 from docx import Document
 from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -52,8 +55,34 @@ def _result(consistency=(), typos=()):
             "models": {"consistency": "model-a", "typos": "model-b"}}
 
 
+def _iter_block_items(parent):
+    """段落と表を文書順に列挙する（python-docx 定番レシピ）。
+
+    所見が表(1行1セル)の中に入る新テンプレでは、`doc.paragraphs` だけを見ると
+    表の中の本文が全部抜け落ちる＝これが無いと所見が「消えた」ように見える。
+    """
+    # docx.Document はファクトリ関数で型ではない(isinstance に使えない)ので、
+    # セル固有の `_tc` の有無でダックタイピングする。
+    parent_elm = parent._tc if hasattr(parent, "_tc") else parent.element.body
+    for child in parent_elm.iterchildren():
+        if child.tag == qn("w:p"):
+            yield Paragraph(child, parent)
+        elif child.tag == qn("w:tbl"):
+            yield Table(child, parent)
+
+
+def _walk_paragraphs(parent):
+    for block in _iter_block_items(parent):
+        if isinstance(block, Paragraph):
+            yield block
+        else:
+            for row in block.rows:
+                for cell in row.cells:
+                    yield from _walk_paragraphs(cell)
+
+
 def _docx_text(buf) -> str:
-    return "\n".join(p.text for p in Document(buf).paragraphs)
+    return "\n".join(p.text for p in _walk_paragraphs(Document(buf)))
 
 
 # ─────────────────────────────────────────────
@@ -147,7 +176,7 @@ def test_slide_numbers_are_written_out_for_readers():
 # ─────────────────────────────────────────────
 def test_every_word_run_declares_an_east_asian_font():
     doc = Document(rep.build_docx(_result(consistency=[_finding(6)]), STEPS, "資料.pptx"))
-    runs = [r for p in doc.paragraphs for r in p.runs]
+    runs = [r for p in _walk_paragraphs(doc) for r in p.runs]
     assert runs, "本文が空"
     missing = [r.text for r in runs
                if r._element.rPr is None or r._element.rPr.rFonts is None
@@ -185,6 +214,62 @@ def test_low_confidence_goes_to_the_reference_chapter_only():
 def test_reference_chapter_is_absent_when_nothing_is_low():
     text = _docx_text(rep.build_docx(_result(consistency=[_finding(6)]), STEPS, "資料.pptx"))
     assert "参考: 確度が低い気づき" not in text
+
+
+# ─────────────────────────────────────────────
+# 7. 体裁の新構造（表・A4・罫線）を機械で守る
+#
+# verifier full 2026-09-18 F-1: 体裁を変える回で、既存テストは1件もその体裁を
+# 検査していなかった（`_setup_page` を no-op にしても14/14 PASSした）。
+# 体裁を変えたら、その体裁を no-op に戻すと落ちるテストを同じコミットで足す。
+# ─────────────────────────────────────────────
+def test_page_size_is_a4():
+    doc = Document(rep.build_docx(_result(consistency=[_finding(6)]), STEPS, "資料.pptx"))
+    section = doc.sections[0]
+    assert round(section.page_width.mm) == 210
+    assert round(section.page_height.mm) == 297
+
+
+def test_each_finding_is_one_uncrossable_table_row():
+    """所見1件＝1つの `cantSplit` 行。件数がずれたら、所見が表からあふれている
+    か、逆に空の表が紛れ込んでいるかのどちらか。"""
+    findings = [_finding(2), _finding(6), _finding(3, kind="誤字脱字")]
+    doc = Document(rep.build_docx(
+        _result(consistency=findings[:2], typos=findings[2:]), STEPS, "資料.pptx"))
+    xml = doc.element.xml
+    assert xml.count("cantSplit") == len(findings)
+
+
+def test_memo_line_has_two_borders():
+    """手書き欄は2行（`between` を併記しないと閲覧側が1本にまとめる罠がある）。"""
+    doc = Document(rep.build_docx(_result(consistency=[_finding(6)]), STEPS, "資料.pptx"))
+    cell = doc.tables[-1].cell(0, 0)  # 表紙のステップ別件数表を除く最後の所見表
+    memo_paragraphs = [p for p in cell.paragraphs
+                       if p._p.find(qn("w:pPr") + "/" + qn("w:pBdr")) is not None]
+    assert len(memo_paragraphs) == 2, "メモ欄の罫線が2本(2段落)になっていない"
+
+
+def test_step_summary_table_matches_the_cover_counts():
+    """表紙の件数表は、表紙上部の「気づいた点」行と同じ数字を指す（二重管理で
+    片方だけ直る事故を防ぐ）。"""
+    findings = [_finding(2), _finding(6), _finding(7, confidence="低")]
+    typos = [_finding(3, kind="誤字脱字")]
+    result = _result(consistency=findings, typos=typos)
+    doc = Document(rep.build_docx(result, STEPS, "資料.pptx"))
+
+    summary = doc.tables[0]
+    consistency_sum = sum(int(row.cells[1].text) for row in summary.rows[1:])
+    typo_sum = sum(int(row.cells[2].text) for row in summary.rows[1:])
+
+    text = _docx_text_buf_free(doc)
+    m = re.search(r"内容の不一致\s*(\d+)件\s*/\s*誤字・脱字\s*(\d+)件", text)
+    assert m is not None, "表紙の「気づいた点」行が見つからない"
+    assert consistency_sum == int(m.group(1))
+    assert typo_sum == int(m.group(2))
+
+
+def _docx_text_buf_free(doc) -> str:
+    return "\n".join(p.text for p in _walk_paragraphs(doc))
 
 
 if __name__ == "__main__":

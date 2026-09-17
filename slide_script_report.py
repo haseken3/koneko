@@ -15,6 +15,10 @@ Word 側の決め事（先生が印刷して手元で直す前提）:
   指定した時だけ閲覧側の代替に落ちた。
 - 断定しない。Word にも「可能性」「最終判断は先生」を刷る（画面と同じ約束）。
 - 確度「低」は末尾の参考章に送る（本編を赤だらけにしない）。
+- 所見1件＝1つの囲み（1行1セルの表）。左に種類色の縦帯・地は淡く・ページを跨がない。
+  紙に落ちた時に「どこからどこまでが1件か」が目で分かることを、行数の節約より優先する。
+- 章は改ページ、所見のあるステップも改ページ。所見0件のステップは流す
+  （0件で改ページすると「ありませんでした」1行だけの紙が何枚も出る）。
 """
 
 import re
@@ -22,9 +26,11 @@ from datetime import datetime
 from io import BytesIO
 
 from docx import Document
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Mm, Pt, RGBColor
 
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -41,6 +47,28 @@ TITLE_PT = 18
 
 INK = "#2E2A22"
 MUTED = "#5C5346"  # 白地の本文に使える濃さ（コントラスト比 7.5:1）
+RULE = "B8AE9E"  # 手書き欄・見出し下の細い罫線（# なしで OOXML にそのまま渡す）
+# スライド見出しの帯。意匠full 2026-09-18 指摘(5-b): 旧値EFEBE3は「相違」の
+# 淡色地(F2ECE3)と実測でほぼ同色(差3,1,0)だった。帯は淡色地4種のどれとも
+# 被らない濃さへ落として区別する（帯＝見出し、淡色地＝所見種類、の役割を分ける）。
+BAND_FILL = "DCD5C4"
+
+# 所見ブロックの地色は種類色を白へ寄せて作る。濃くすると本文の黒と競り、
+# モノクロ印刷で灰に潰れて字が沈む。薄くすると「まとまり」が見えない。
+BLOCK_TINT = 0.12
+# スライド見出しの帯（_write_section の band、indent=8pt）と表の左端を揃える値。
+# 意匠full 2026-09-18 指摘(5-a): 旧値2ptは実測で3.05mm左にずれていた
+# （tblInd はセル内マージンぶんの補正が要らず、帯のindentと同じ値で揃う。
+#  実測して直した＝ソース値だけで判断しない）。
+BLOCK_INDENT_PT = 8
+
+# 用紙は A4 固定（python-docx の既定は Letter＝日本のプリンタで拡縮される）。
+# 左だけ綴じ代ぶん広い。
+PAGE_W_MM, PAGE_H_MM = 210, 297
+MARGIN_TB_MM = 20
+MARGIN_LR_MM = 22
+GUTTER_MM = 3
+TEXT_W_MM = PAGE_W_MM - MARGIN_LR_MM * 2 - GUTTER_MM
 
 # 種類ごとの文字ラベルと色（画面・Word 共通の正本）。断定しない言い回しで固定する。
 KIND_LABEL = {
@@ -167,9 +195,64 @@ def _style(run, *, size=BODY_PT, bold=False, color=INK, underline=False):
     return run
 
 
-def _para(doc, text="", *, size=BODY_PT, bold=False, color=INK,
+# OOXML の子要素はスキーマの順序どおりに並んでいないと閲覧側に無視される
+# （罫線が出ない・網掛けが消える形で現れ、例外は出ない）。順序表を持っておく。
+# 今実際に挿し込むのは pBdr/shd（pPr側）・tblW/tblInd/tblBorders（tblPr側）だけ
+# だが、将来要素が増えた時に個別対応しないための全順序表（inspector 2026-09-18）。
+_PPR_ORDER = (
+    "w:pStyle", "w:keepNext", "w:keepLines", "w:pageBreakBefore", "w:framePr",
+    "w:widowControl", "w:numPr", "w:suppressLineNumbers", "w:pBdr", "w:shd",
+    "w:tabs", "w:suppressAutoHyphens", "w:kinsoku", "w:wordWrap",
+    "w:overflowPunct", "w:topLinePunct", "w:autoSpaceDE", "w:autoSpaceDN",
+    "w:bidi", "w:adjustRightInd", "w:snapToGrid", "w:spacing", "w:ind",
+    "w:contextualSpacing", "w:mirrorIndents", "w:suppressOverlap", "w:jc",
+    "w:textDirection", "w:textAlignment", "w:textboxTightWrap", "w:outlineLvl",
+    "w:divId", "w:cnfStyle", "w:rPr", "w:sectPr", "w:pPrChange",
+)
+_TBLPR_ORDER = (
+    "w:tblStyle", "w:tblpPr", "w:tblOverlap", "w:bidiVisual",
+    "w:tblStyleRowBandSize", "w:tblStyleColBandSize", "w:tblW", "w:jc",
+    "w:tblCellSpacing", "w:tblInd", "w:tblBorders", "w:shd", "w:tblLayout",
+    "w:tblCellMar", "w:tblLook", "w:tblCaption", "w:tblDescription",
+    "w:tblPrChange",
+)
+_SIDES = ("top", "left", "bottom", "right")
+_PBDR_ORDER = ("top", "left", "bottom", "right", "between", "bar")
+
+
+def _el(tag, **attrs):
+    element = OxmlElement(tag)
+    for key, value in attrs.items():
+        element.set(qn(f"w:{key}"), str(value))
+    return element
+
+
+def _insert_ordered(parent, element, order):
+    tag = "w:" + element.tag.split("}")[-1]
+    parent.insert_element_before(element, *order[order.index(tag) + 1:])
+
+
+def _tbl_child(table, tag):
+    """tblPr の子を取る（無ければ順序どおりに差し込む）。tblW は既に在る。"""
+    tbl_pr = table._tbl.tblPr
+    element = tbl_pr.find(qn(tag))
+    if element is None:
+        element = OxmlElement(tag)
+        _insert_ordered(tbl_pr, element, _TBLPR_ORDER)
+    return element
+
+
+def _tint(color, ratio):
+    """色を白へ寄せた淡い地色を作る（`#RRGGBB` → `RRGGBB`）。"""
+    raw = color.lstrip("#")
+    return "".join(f"{round(int(raw[i:i + 2], 16) * ratio + 255 * (1 - ratio)):02X}"
+                   for i in (0, 2, 4))
+
+
+def _para(container, text="", *, size=BODY_PT, bold=False, color=INK,
           space_before=0, space_after=4, indent=0):
-    p = doc.add_paragraph()
+    """段落を1つ足す。container は Document でも表のセルでもよい。"""
+    p = container.add_paragraph()
     p.paragraph_format.space_before = Pt(space_before)
     p.paragraph_format.space_after = Pt(space_after)
     if indent:
@@ -179,21 +262,49 @@ def _para(doc, text="", *, size=BODY_PT, bold=False, color=INK,
     return p
 
 
-def _labeled(doc, label, value, *, color=MUTED, indent=12):
-    p = _para(doc, indent=indent)
+def _labeled(container, label, value, *, color=MUTED, indent=12):
+    p = _para(container, indent=indent)
     _style(p.add_run(f"{label}: "), bold=True, color=color)
     _style(p.add_run(value), color=INK)
     return p
 
 
-def _bottom_border(paragraph, color="B8AE9E"):
-    """段落の下に手書き用の罫線を1本引く。"""
+def _para_border(paragraph, **sides):
+    """段落に罫線を引く。sides は `bottom=(色, 太さsz, 文字との間隔space)`。
+
+    注意: 罫線の指定がまったく同じ段落が続くと、閲覧側はそれを1つの囲みとして
+    まとめ、下罫線を最後の段落にしか描かない（手書き欄を2行にしたいのに1本しか
+    出ない）。続けて線を引きたいときは `between` を併せて渡す。
+    """
     borders = OxmlElement("w:pBdr")
-    bottom = OxmlElement("w:bottom")
-    for key, value in (("val", "single"), ("sz", "6"), ("space", "6"), ("color", color)):
-        bottom.set(qn(f"w:{key}"), value)
-    borders.append(bottom)
-    paragraph._p.get_or_add_pPr().append(borders)
+    for name in _PBDR_ORDER:
+        if name in sides:
+            color, sz, space = sides[name]
+            borders.append(_el(f"w:{name}", val="single", sz=sz, space=space,
+                               color=color))
+    _insert_ordered(paragraph._p.get_or_add_pPr(), borders, _PPR_ORDER)
+
+
+def _para_shade(paragraph, fill):
+    _insert_ordered(paragraph._p.get_or_add_pPr(),
+                    _el("w:shd", val="clear", color="auto", fill=fill), _PPR_ORDER)
+
+
+def _spacer(doc, *, space_after=10, mark_pt=2):
+    """表と表の間に挟む段落。
+
+    隣り合う表は Word が1つの表につなげてしまうので、所見ブロックの間には必ず
+    段落が要る。ただし本文と同じ高さだと隙間が開きすぎるため、段落記号を小さく
+    落として、間隔は space_after で作る。
+    """
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(space_after)
+    rpr = OxmlElement("w:rPr")  # w:sz は half-point 単位
+    rpr.append(_el("w:sz", val=mark_pt * 2))
+    rpr.append(_el("w:szCs", val=mark_pt * 2))
+    _insert_ordered(p._p.get_or_add_pPr(), rpr, _PPR_ORDER)
+    return p
 
 
 def _apply_default_font(doc):
@@ -204,41 +315,223 @@ def _apply_default_font(doc):
     style.element.rPr.get_or_add_rFonts().set(qn("w:eastAsia"), EASTASIA_FONT)
 
 
+def _field_run(paragraph, instr, *, placeholder="1"):
+    """PAGE/NUMPAGES のような単純フィールドを段落に足す。
+
+    `w:fldSimple` はキャッシュ済みの表示値(`placeholder`)を子の run に持てる。
+    閲覧側がフィールドを再計算しない設定でも、開いた瞬間は placeholder が
+    見える（0 や空白でなく「1」を入れておけば、更新されなくても違和感が薄い）。
+    """
+    fld = OxmlElement("w:fldSimple")
+    fld.set(qn("w:instr"), instr)
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    rpr.get_or_add_rFonts().set(qn("w:eastAsia"), EASTASIA_FONT)
+    run.append(rpr)
+    t = OxmlElement("w:t")
+    t.text = placeholder
+    run.append(t)
+    fld.append(run)
+    paragraph._p.append(fld)
+
+
+def _setup_footer(doc):
+    """ページ番号を中央に刷る（意匠full 2026-09-18 指摘6-b: 90頁の印刷物に
+    ノンブルが1つも無く「45ページの件」が言えない）。"""
+    footer = doc.sections[0].footer
+    footer.is_linked_to_previous = False
+    p = footer.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    _style(p.add_run("- "), size=9, color=MUTED)
+    _field_run(p, "PAGE")
+    _style(p.add_run(" / "), size=9, color=MUTED)
+    _field_run(p, "NUMPAGES")
+    _style(p.add_run(" -"), size=9, color=MUTED)
+
+
+def _setup_page(doc):
+    section = doc.sections[0]
+    section.page_width = Mm(PAGE_W_MM)
+    section.page_height = Mm(PAGE_H_MM)
+    section.top_margin = Mm(MARGIN_TB_MM)
+    section.bottom_margin = Mm(MARGIN_TB_MM)
+    section.left_margin = Mm(MARGIN_LR_MM + GUTTER_MM)
+    section.right_margin = Mm(MARGIN_LR_MM)
+
+
+def _block_table(doc, *, bar_color, fill):
+    """所見1件ぶんの囲み（1行1セルの表）を作って返す。
+
+    左だけ種類色の太い縦帯、地は淡く、上下右は罫線なし。行に cantSplit を付けて
+    所見がページを跨がないようにする（跨ぐと「原稿／ご提案」が別の紙に散る）。
+    """
+    width = Mm(TEXT_W_MM).twips - Pt(BLOCK_INDENT_PT).twips
+    table = doc.add_table(rows=1, cols=1)
+    table.autofit = False
+    tbl_w = _tbl_child(table, "w:tblW")
+    tbl_w.set(qn("w:type"), "dxa")
+    tbl_w.set(qn("w:w"), str(width))
+    tbl_ind = _tbl_child(table, "w:tblInd")
+    tbl_ind.set(qn("w:type"), "dxa")
+    tbl_ind.set(qn("w:w"), str(Pt(BLOCK_INDENT_PT).twips))
+
+    row = table.rows[0]
+    row._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
+
+    # 意匠full 2026-09-18 指摘(5-a)の実測沼: `cell.width=` は tcW だけを書き、
+    # `tblGrid/gridCol` は既定値(6インチ)のまま残る python-docx の癖がある
+    # （tblW と gridCol が食い違い、閲覧側は gridCol 基準で描いて右端が3.05mm
+    # 短くなっていた）。`table.columns[0].width` で gridCol も同じ値に揃える。
+    content_width = Mm(TEXT_W_MM) - Pt(BLOCK_INDENT_PT)
+    table.columns[0].width = content_width
+    cell = table.cell(0, 0)
+    cell.width = content_width
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = OxmlElement("w:tcBorders")
+    for name in _SIDES:
+        borders.append(_el(f"w:{name}", val="single", sz=24, space=0, color=bar_color)
+                       if name == "left" else _el(f"w:{name}", val="nil"))
+    tc_pr.append(borders)
+    tc_pr.append(_el("w:shd", val="clear", color="auto", fill=fill))
+    margins = OxmlElement("w:tcMar")
+    for name, amount in (("top", 110), ("left", 170), ("bottom", 150), ("right", 130)):
+        margins.append(_el(f"w:{name}", w=amount, type="dxa"))
+    tc_pr.append(margins)
+    return table
+
+
 def _write_finding(doc, finding):
     kind = finding.get("kind", "")
     color = KIND_COLOR.get(kind, INK)
-    head = _para(doc, space_before=8, space_after=2, indent=12)
-    _style(head.add_run(f"● {KIND_LABEL.get(kind, kind)}"), bold=True, color=color)
-    _style(head.add_run(f"　（AIの確度: {finding.get('confidence', '')}）"), color=MUTED)
+    table = _block_table(doc, bar_color=color.lstrip("#").upper(),
+                         fill=_tint(color, BLOCK_TINT))
+    cell = table.cell(0, 0)
+    placeholder = cell.paragraphs[0]
 
-    _labeled(doc, quote_label(finding), finding.get("quote", ""))
+    # 意匠full 2026-09-18 指摘(6-a): 同じスライドの2件目以降が改ページ先頭に
+    # 来ると、直上のスライド帯が前頁に残り「どのスライドの話か」が分からない
+    # 紙になる（実測90頁中23頁）。●行自体にスライド番号を持たせて、帯が
+    # 見えない頁でも所見単体で分かるようにする。
+    head = _para(cell, space_after=3)
+    _style(head.add_run(f"● {KIND_LABEL.get(kind, kind)}"), bold=True, color=color)
+    slide_tag = f"スライド{finding['slide_num']}・" if finding.get("slide_num") else ""
+    _style(head.add_run(f"　（{slide_tag}AIの確度: {finding.get('confidence', '')}）"), color=MUTED)
+
+    _labeled(cell, quote_label(finding), finding.get("quote", ""), indent=0)
     if finding.get("counterpart"):
-        _labeled(doc, counterpart_label(finding), finding["counterpart"])
+        _labeled(cell, counterpart_label(finding), finding["counterpart"], indent=0)
     if finding.get("reason"):
-        _labeled(doc, "気づいた理由", finding["reason"])
+        _labeled(cell, "気づいた理由", finding["reason"], indent=0)
     if finding.get("suggestion"):
-        _labeled(doc, "ご提案", finding["suggestion"])
+        _labeled(cell, "ご提案", finding["suggestion"], indent=0)
 
     # □ は U+25A1（日本語書体が持つ字）。☐ U+2610 だと別フォントに落ちて字面が揃わない。
     # 書き込み欄の線は run の下線でなく段落の下罫線で引く（空白だけの run に下線を付けても
     # 線が描かれない閲覧環境がある＝実測: LibreOffice で PDF 化したとき線が消えた）。
-    memo = _para(doc, "□ 対応した　　メモ:", color=MUTED, space_after=14, indent=12)
-    _bottom_border(memo)
+    # 意匠full 2026-09-18 指摘(4-b): 旧 space=12pt だと罫線間13.5mm(実測)で
+    # 手書き欄として広すぎ、ブロックが伸びて1頁2件止まりの主因になっていた。
+    # 6pt に詰めて手書きしやすい幅(実測後に確認)へ。
+    memo = _para(cell, "□ 対応した　　メモ:", color=MUTED, space_before=6, space_after=0)
+    write_line = _para(cell, space_after=0)
+    for p in (memo, write_line):
+        _para_border(p, bottom=(RULE, 6, 6), between=(RULE, 6, 6))
+
+    # セルが最初から持っている空段落。先頭に余白が1行ぶん残るので外す。
+    placeholder._p.getparent().remove(placeholder._p)
+    _spacer(doc)
 
 
 def _write_section(doc, title, findings, steps):
-    _para(doc, title, size=SECTION_HEADING_PT, bold=True, space_before=20, space_after=6)
+    p = _para(doc, title, size=SECTION_HEADING_PT, bold=True, space_after=10)
+    p.paragraph_format.page_break_before = True
+    p.paragraph_format.keep_with_next = True
+    _para_border(p, bottom=(INK.lstrip("#"), 12, 8))
+
+    # 意匠full 2026-09-18 指摘(4-c): 「0件ステップの次のステップは無条件で改ページ」
+    # だと、0件ステップだけが載った紙の残りが丸ごと白紙になる（実測で頁の86%が
+    # 白紙の例あり）。改ページは「これより前に所見のあるステップを1つ以上
+    # 置いたか」で判定し、0件ステップの直後はそのまま同じ紙に続ける。
+    seen_filled = False
     for group in group_findings_by_step(findings, steps):
-        _para(doc, group["heading"], size=STEP_HEADING_PT, bold=True,
-              space_before=12, space_after=2)
-        _para(doc, count_text(group), color=MUTED, space_after=4, indent=6)
+        has_findings = bool(group["findings"])
+        page_break = has_findings and seen_filled
+        seen_filled = seen_filled or has_findings
+        step = _para(doc, group["heading"], size=STEP_HEADING_PT, bold=True,
+                     space_before=0 if page_break else 22, space_after=4)
+        step.paragraph_format.page_break_before = page_break
+        step.paragraph_format.keep_with_next = True
+        _para_border(step, bottom=(RULE, 6, 6))
+
+        count = _para(doc, count_text(group), color=MUTED, space_after=6, indent=4)
+        count.paragraph_format.keep_with_next = bool(group["findings"])
+
         for slide in group["slides"]:
             title_text = f"　{slide['title']}" if slide["title"] else ""
-            _para(doc, f"スライド {slide['slide_num']}{title_text}",
-                  size=SLIDE_HEADING_PT, bold=True, space_before=10, space_after=2,
-                  indent=6)
+            band = _para(doc, f"スライド {slide['slide_num']}{title_text}",
+                         size=SLIDE_HEADING_PT, bold=True, space_before=14,
+                         space_after=8, indent=8)
+            band.paragraph_format.keep_with_next = True
+            _para_shade(band, BAND_FILL)
+            _para_border(band, left=(MUTED.lstrip("#"), 12, 6))
             for finding in slide["findings"]:
                 _write_finding(doc, finding)
+
+
+def _cell_text(cell, text, *, bold=False, center=False, size=10):
+    p = cell.paragraphs[0]
+    p.paragraph_format.space_before = Pt(3)
+    p.paragraph_format.space_after = Pt(3)
+    if center:
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _style(p.add_run(text), size=size, bold=bold)
+    return p
+
+
+def _write_step_summary(doc, consistency, typos, steps):
+    """表紙に「ステップ別の件数」を1つ。分割前（steps なし）は1行なので出さない。
+
+    ステップ名は `step_heading` から取る（対象スライドも入っている）＝画面・本文と
+    同じ正本で、ここで括りのロジックを二重に持たない。
+    """
+    if not steps:
+        return
+    by_step = group_findings_by_step(consistency, steps)
+    typo_counts = {g["heading"]: len(g["findings"])
+                   for g in group_findings_by_step(typos, steps)}
+    counts = {g["heading"]: len(g["findings"]) for g in by_step}
+    headings = [g["heading"] for g in by_step]
+    headings += [h for h in typo_counts if h not in counts]
+
+    _para(doc, "ステップ別の件数", size=SLIDE_HEADING_PT, bold=True,
+          space_before=16, space_after=6)
+    table = doc.add_table(rows=len(headings) + 1, cols=3)
+    table.autofit = False  # 所見ブロックの表と同じ流儀（dxaで明示、Wordの自動列幅に譲らない）
+    tbl_w = _tbl_child(table, "w:tblW")
+    tbl_w.set(qn("w:type"), "dxa")
+    tbl_w.set(qn("w:w"), str(Mm(TEXT_W_MM).twips))
+    borders = OxmlElement("w:tblBorders")
+    for name in (*_SIDES, "insideH", "insideV"):
+        borders.append(_el(f"w:{name}", val="single", sz=4, space=0, color=RULE))
+    _insert_ordered(table._tbl.tblPr, borders, _TBLPR_ORDER)
+    # 意匠full 2026-09-18 指摘(8): 旧配分(107/28/28mm)だと1列目が狭く、実測で
+    # 「スライド」が語の内側で改行された。数値2列を22mmへ削って1列目へ回す。
+    for index, width in enumerate((TEXT_W_MM - 44, 22, 22)):
+        for row in table.rows:
+            row.cells[index].width = Mm(width)
+
+    for cell, label in zip(table.rows[0].cells,
+                           ("ステップ（対象スライド）", "不一致", "誤字・脱字")):
+        _para_shade(_cell_text(cell, label, bold=True,
+                               center=label != "ステップ（対象スライド）"), BAND_FILL)
+    for row, heading in zip(table.rows[1:], headings):
+        _cell_text(row.cells[0], heading)
+        _cell_text(row.cells[1], str(counts.get(heading, 0)), center=True)
+        _cell_text(row.cells[2], str(typo_counts.get(heading, 0)), center=True)
+    for row in table.rows:
+        for cell in row.cells:
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
 
 
 def build_docx(result, steps=None, pptx_filename="") -> BytesIO:
@@ -251,6 +544,8 @@ def build_docx(result, steps=None, pptx_filename="") -> BytesIO:
     """
     doc = Document()
     _apply_default_font(doc)
+    _setup_page(doc)
+    _setup_footer(doc)
 
     consistency, low_consistency = split_by_confidence(result.get("consistency"))
     typos, low_typos = split_by_confidence(result.get("typos"))
@@ -268,9 +563,11 @@ def build_docx(result, steps=None, pptx_filename="") -> BytesIO:
                  f"不一致 {models.get('consistency', '')} / "
                  f"誤字脱字 {models.get('typos', '')}", indent=0)
 
-    _para(doc, DISCLAIMER, color=MUTED, space_before=8, space_after=8)
+    _para(doc, DISCLAIMER, color=MUTED, space_before=10, space_after=8)
     for message in result.get("errors") or []:
         _para(doc, f"※ {message}", color=MUTED, space_after=2)
+
+    _write_step_summary(doc, consistency, typos, steps)
 
     _write_section(doc, "内容の不一致の可能性", consistency, steps)
     _write_section(doc, "誤字・脱字の可能性", typos, steps)
