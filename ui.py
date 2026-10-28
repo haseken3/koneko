@@ -12,6 +12,7 @@ from koneko.narration_counter import (
     STEP_TARGET_MIN_SEC,
     STEP_TARGET_MAX_SEC,
 )
+from koneko import koneko_core
 from koneko.slide_script_check_ui import (
     render_slide_script_check,
     run_step_segmentation,
@@ -22,16 +23,13 @@ from koneko.slide_script_check_ui import (
 
 def _load_anthropic_key():
     """Streamlit Secrets（Cloud）→ ローカルファイル の順で Anthropic API キーを取得。"""
-    from pathlib import Path
+    secret = None
     try:
         if "anthropic_api_key" in st.secrets:
-            return st.secrets["anthropic_api_key"]
+            secret = st.secrets["anthropic_api_key"]
     except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
         pass
-    p = Path.home() / ".config" / "koneko-idcheck" / "anthropic_api_key.txt"
-    if p.exists():
-        return p.read_text().strip()
-    return None
+    return koneko_core.load_anthropic_key(secret)
 
 
 def _render_step_table(steps):
@@ -166,13 +164,14 @@ def render_koneko_counter():
     # ─────────────────────────────────────────────
     with st.sidebar:
         st.header("設定")
+        _cpm = koneko_core.CHARS_PER_MIN
         chars_per_min = st.slider(
             "読み上げ速度（文字/分）",
-            min_value=250,
-            max_value=400,
-            value=300,
-            step=10,
-            help="日本語ナレーションの目安: ゆっくり250〜速め400文字/分",
+            min_value=_cpm["min"],
+            max_value=_cpm["max"],
+            value=_cpm["value"],
+            step=_cpm["step"],
+            help=_cpm["help"],
         )
 
     # ─────────────────────────────────────────────
@@ -233,9 +232,7 @@ def render_koneko_counter():
 
         # タイムラインバー
         st.markdown('<div style="margin-top:2.5rem"></div>', unsafe_allow_html=True)
-        max_chars = max((s["char_count"] for s in slides), default=1)
-        if max_chars == 0:
-            max_chars = 1
+        max_chars = koneko_core.max_char_count(slides)
 
         timeline_html = '<div style="display:flex;width:100%;height:48px;border-radius:8px;overflow:hidden;gap:1px;background:#E8E0D8">'
         for s in slides:
@@ -243,11 +240,8 @@ def render_koneko_counter():
                 continue
             width_pct = s["estimated_seconds"] / result["estimated_seconds"] * 100 if result["estimated_seconds"] > 0 else 0
             ratio = s["char_count"] / max_chars
-            r = int(245 + (195 - 245) * ratio)
-            g = int(230 + (90 - 230) * ratio)
-            b = int(211 + (53 - 211) * ratio)
-            color = f"rgb({r},{g},{b})"
-            text_color = "#FFFFFF" if ratio > 0.5 else "#7A4A2A"
+            color = koneko_core.heat_color(ratio)
+            text_color = koneko_core.heat_text_color(ratio)
             title_text = s["title"] or f"スライド{s['slide_num']}"
             tooltip = f"S{s['slide_num']}: {title_text}&#10;{s['char_count']}文字 / {format_duration(s['estimated_seconds'])}"
             font_size = "0.7em" if width_pct < 4 else "0.75em"
@@ -281,10 +275,7 @@ def render_koneko_counter():
         for s in slides:
             bar_width = s["char_count"] / max_chars * 100 if max_chars > 0 else 0
             ratio = s["char_count"] / max_chars if max_chars > 0 else 0
-            r = int(245 + (195 - 245) * ratio)
-            g = int(230 + (90 - 230) * ratio)
-            b = int(211 + (53 - 211) * ratio)
-            bar_color = f"rgb({r},{g},{b})"
+            bar_color = koneko_core.heat_color(ratio)
             bg = "#FFFFFF" if s["slide_num"] % 2 == 1 else "#FAF7F4"
             rows_html += (
                 f'<tr style="background:{bg}">'
@@ -388,44 +379,15 @@ def render_koneko_idcheck():
     import できる。単独アプリ idcheck_app.py の st.stop() は、統合UIでは下部ナビバーまで
     止めてしまうため return に置き換えている。
     """
-    import sys
-    from pathlib import Path
-    from datetime import datetime
-
-    _IDCHECK_DIR = Path(__file__).resolve().parent / "idcheck"
-    if str(_IDCHECK_DIR) not in sys.path:
-        sys.path.insert(0, str(_IDCHECK_DIR))
-
     import anthropic
-    from docx_writer import build_docx
-    from llm_evaluator import (
-        MODEL_OPUS,
-        evaluate_all,
-        load_checklist,
-        llm_evaluable_only,
-    )
-    from pptx_reader import read_slides
 
-    LOCAL_KEY_PATH = Path.home() / ".config" / "koneko-idcheck" / "anthropic_api_key.txt"
+    idc = koneko_core.load_idcheck()
+    build_docx, MODEL_OPUS, evaluate_all = idc.build_docx, idc.MODEL_OPUS, idc.evaluate_all
+    load_checklist, llm_evaluable_only, read_slides = idc.load_checklist, idc.llm_evaluable_only, idc.read_slides
+
+    LOCAL_KEY_PATH = koneko_core.LOCAL_KEY_PATH
     DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-    def _load_api_key():
-        """Streamlit Secrets（Cloud）→ ローカルファイル の順で API キーを取得。"""
-        try:
-            if "anthropic_api_key" in st.secrets:
-                return st.secrets["anthropic_api_key"]
-        except (FileNotFoundError, st.errors.StreamlitSecretNotFoundError):
-            pass
-        if LOCAL_KEY_PATH.exists():
-            return LOCAL_KEY_PATH.read_text().strip()
-        return None
-
-    GRADE_TO_PERSONA = {
-        "1年次": "grade1_shin",
-        "2年次": "grade2_mai",
-        "3年次": "grade3_ken",
-        "4年次": "grade4_aya",
-    }
+    GRADE_TO_PERSONA = koneko_core.GRADE_TO_PERSONA
 
     # ファイルアップローダーの見た目をオレンジ系に（counter と揃える）
     st.markdown("""
@@ -451,8 +413,8 @@ def render_koneko_idcheck():
         grade_label = st.selectbox(
             "授業の年次",
             options=list(GRADE_TO_PERSONA.keys()),
-            index=1,  # 2年次がデフォルト
-            help="評価対象の授業を受講する学年を選択してください。",
+            index=list(GRADE_TO_PERSONA).index(koneko_core.GRADE_DEFAULT),  # 2年次がデフォルト
+            help=koneko_core.GRADE_HELP,
             key="koneko_idcheck_grade",
         )
     persona_key = GRADE_TO_PERSONA[grade_label]
@@ -461,7 +423,7 @@ def render_koneko_idcheck():
     cl = load_checklist()
     item_filter = llm_evaluable_only
 
-    api_key = _load_api_key()
+    api_key = _load_anthropic_key()
     if not api_key:
         st.error(
             f"⚠ Anthropic API キーが設定されていません。\n\n"
@@ -500,16 +462,15 @@ def render_koneko_idcheck():
         for s in slides:
             st.markdown(f"- **S{s['slide_num']}**: {s['title'] or '（タイトルなし）'}")
 
-    items = cl["items"]
-    if item_filter:
-        items = [it for it in items if item_filter(it)]
+    items = koneko_core.idcheck_items(cl, item_filter)
+    plan = koneko_core.idcheck_plan(len(items), model)
 
     st.divider()
     st.subheader("評価実行")
     st.markdown(
-        f"**実行内容**: {len(items)} 項目 × 1 ペルソナ（{persona_key}）× {model.split('-')[1]} モデル\n\n"
-        f"想定 API コール数: {len(items)} 回 / "
-        f"想定所要時間: 約 {len(items) * 9 // 60} 〜 {len(items) * 12 // 60} 分"
+        f"**実行内容**: {plan['items']} 項目 × 1 ペルソナ（{persona_key}）× {plan['model']} モデル\n\n"
+        f"想定 API コール数: {plan['calls']} 回 / "
+        f"想定所要時間: 約 {plan['min_lo']} 〜 {plan['min_hi']} 分"
     )
 
     if st.button("🚀 評価を開始", type="primary", key="koneko_idcheck_run"):
@@ -525,7 +486,7 @@ def render_koneko_idcheck():
             )
             if result["ok"]:
                 ev = result["evaluation"]
-                mark = {-1: "🔴", 0: "⚪", 1: "🟢"}.get(ev["score"], "❓")
+                mark = koneko_core.SCORE_MARK.get(ev["score"], "❓")
                 log_lines.append(
                     f"{mark} **[{item['id']}]** {item['title'][:50]} → スコア {ev['score']:+d}"
                 )
@@ -553,13 +514,8 @@ def render_koneko_idcheck():
 
         progress.progress(1.0, text="評価完了！")
 
-        ok_count = sum(1 for r in results if r["result"]["ok"])
-        fail_count = len(results) - ok_count
-        score_counts = {-1: 0, 0: 0, 1: 0}
-        for r in results:
-            if r["result"]["ok"]:
-                s = r["result"]["evaluation"]["score"]
-                score_counts[s] = score_counts.get(s, 0) + 1
+        summary = koneko_core.idcheck_summary(results)
+        ok_count, fail_count, score_counts = summary["ok"], summary["fail"], summary["scores"]
 
         st.success(f"✅ 評価完了: {ok_count}/{len(results)} 件成功")
         smcol1, smcol2, smcol3, smcol4 = st.columns(4)
@@ -581,11 +537,7 @@ def render_koneko_idcheck():
             model=model,
             levels_meta=cl["levels"],
         )
-        pptx_stem = Path(source_label).stem or "idcheck"
-        download_name = (
-            f"{pptx_stem}_IDフィードバック_"
-            f"{datetime.now().strftime('%Y%m%d_%H%M')}.docx"
-        )
+        download_name = koneko_core.idcheck_download_name(source_label)
         st.download_button(
             label="📥 Word フィードバックをダウンロード",
             data=docx_buf,
@@ -600,7 +552,7 @@ def render_koneko_idcheck():
                 res = r["result"]
                 if res["ok"]:
                     ev = res["evaluation"]
-                    mark = {-1: "🔴", 0: "⚪", 1: "🟢"}.get(ev["score"], "❓")
+                    mark = koneko_core.SCORE_MARK.get(ev["score"], "❓")
                     st.markdown(
                         f"### {mark} [{item['id']}] {item['title']}\n"
                         f"**スコア**: {ev['score']:+d}　**該当スライド**: "

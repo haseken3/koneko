@@ -31,7 +31,7 @@ import streamlit as st
 _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
     sys.path.append(_HERE)
-from slide_script_check import extract_slides, is_total_failure, run_checks  # noqa: E402
+import koneko_core  # noqa: E402
 import step_segmenter  # noqa: E402
 from slide_script_report import (  # noqa: E402
     DOCX_MIME,
@@ -245,7 +245,7 @@ def _run_consistency_check(pptx_source, api_key, *, file_id, key_prefix, model, 
         run_clicked = st.button("🔍 AIで不一致・誤字脱字をチェックする",
                                 key=f"{key_prefix}_ssc_btn", type="primary")
         if total_slides:
-            est_min = max(1, round(total_slides * 3 / 60))
+            est_min = koneko_core.check_estimate_minutes(total_slides)
             st.markdown(
                 f'<div style="font-size:0.9rem;color:{MUTED}">'
                 f'{total_slides}枚・目安 約{est_min}分（104枚で約5分）</div>',
@@ -266,17 +266,8 @@ def _run_consistency_check(pptx_source, api_key, *, file_id, key_prefix, model, 
                          text=f"AIが点検中… {done}/{total} ブロック")
 
         def _runner():
-            if hasattr(pptx_source, "seek"):
-                pptx_source.seek(0)
-            slides = extract_slides(pptx_source)
-            overrides = {k: v for k, v in (("model", model), ("typo_model", typo_model)) if v}
-            result = run_checks(slides=slides, api_key=api_key, progress=_on_progress, **overrides)
-            if is_total_failure(result):
-                raise RuntimeError(
-                    f"全{len(result.get('errors', []))}件のブロックが失敗しました: "
-                    + "; ".join(result.get("errors", []))
-                )
-            return result
+            return koneko_core.run_slide_script_check(pptx_source, api_key, model=model,
+                                                      typo_model=typo_model, progress=_on_progress)
 
         cached = ensure_result(cached, file_id, _runner, force=True)
         st.session_state[state_key] = cached
