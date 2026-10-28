@@ -1,8 +1,10 @@
-"""ko-NeKo の画面を持たない部分（ナレーションカウンター・IDチェッカー）。
+"""ko-NeKo の画面を持たない部分（授業資料チェッカー＝ナレーションカウンター＋スライドと原稿のチェック）。
+
+IDチェッカーは NeKo の画面から廃止した（ケンタ裁定 2026-10-28）ので、その部分はここから外した。
 
 Streamlit 版（ui.py・slide_script_check_ui.py）と、NeKo の白磁の Web 版（NeKo/web/koneko_api.py）の
 両方がここを呼ぶ（2026-10-28 に ui.py・slide_script_check_ui.py から括り出した・写さない）。
-既定・範囲・色の決め方・評価の数え方の正本はここ。画面の文言は各画面が持つ。
+既定・範囲・色の決め方の正本はここ。画面の文言は各画面が持つ。
 
 このモジュールは flat（slide_script_check_ui の `import koneko_core`）とパッケージ経由
 （ui.py・NeKo の `from koneko import koneko_core`）の両方で読まれるので、narration_counter と
@@ -10,9 +12,7 @@ Streamlit 版（ui.py・slide_script_check_ui.py）と、NeKo の白磁の Web �
 """
 
 import sys
-from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
@@ -85,61 +85,3 @@ def run_slide_script_check(pptx_source, api_key, *, model=None, typo_model=None,
             + "; ".join(result.get("errors", []))
         )
     return result
-
-
-# ─── IDチェッカー（鈴木克明レイヤーモデル44項目） ───
-GRADE_TO_PERSONA = {
-    "1年次": "grade1_shin",
-    "2年次": "grade2_mai",
-    "3年次": "grade3_ken",
-    "4年次": "grade4_aya",
-}
-GRADE_DEFAULT = "2年次"
-GRADE_HELP = "評価対象の授業を受講する学年を選択してください。"
-SCORE_MARK = {-1: "🔴", 0: "⚪", 1: "🟢"}
-
-
-def load_idcheck():
-    """idcheck/ のモジュールを読む。
-
-    idcheck/ 配下（llm_evaluator 等）は Path(__file__) ベースで checklist.json / personas を
-    解決するため、ディレクトリを sys.path に通すだけで import できる。
-    """
-    idcheck_dir = str(Path(_HERE) / "idcheck")
-    if idcheck_dir not in sys.path:
-        sys.path.insert(0, idcheck_dir)
-    from docx_writer import build_docx
-    from llm_evaluator import MODEL_OPUS, evaluate_all, llm_evaluable_only, load_checklist
-    from pptx_reader import read_slides
-    return SimpleNamespace(build_docx=build_docx, MODEL_OPUS=MODEL_OPUS, evaluate_all=evaluate_all,
-                           llm_evaluable_only=llm_evaluable_only, load_checklist=load_checklist,
-                           read_slides=read_slides)
-
-
-def idcheck_items(checklist, item_filter):
-    """評価する項目（item_filter が None なら全部）。"""
-    items = checklist["items"]
-    return [it for it in items if item_filter(it)] if item_filter else items
-
-
-def idcheck_plan(n_items: int, model: str) -> dict:
-    """「実行内容」の数（項目数・モデルの短い名・API コール数・所要時間の目安（分））。"""
-    return {"items": n_items, "model": model.split("-")[1], "calls": n_items,
-            "min_lo": n_items * 9 // 60, "min_hi": n_items * 12 // 60}
-
-
-def idcheck_summary(results) -> dict:
-    """評価の結果を数える（成功・失敗・スコアごと）。"""
-    ok = sum(1 for r in results if r["result"]["ok"])
-    scores = {-1: 0, 0: 0, 1: 0}
-    for r in results:
-        if r["result"]["ok"]:
-            s = r["result"]["evaluation"]["score"]
-            scores[s] = scores.get(s, 0) + 1
-    return {"ok": ok, "total": len(results), "fail": len(results) - ok, "scores": scores}
-
-
-def idcheck_download_name(source_label, now=None) -> str:
-    """Word フィードバックのファイル名（<資料名>_IDフィードバック_<年月日_時分>.docx）。"""
-    stem = Path(str(source_label)).stem or "idcheck"
-    return f"{stem}_IDフィードバック_{(now or datetime.now()).strftime('%Y%m%d_%H%M')}.docx"
